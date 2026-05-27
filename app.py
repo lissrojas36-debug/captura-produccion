@@ -1,163 +1,65 @@
 import streamlit as st
-import pandas as pd
 from PIL import Image, ImageDraw
-from io import BytesIO
-import easyocr
 import numpy as np
-import cv2
-from streamlit_cropper import st_cropper
 
-st.set_page_config(page_title="Captura Producción", layout="wide")
+st.set_page_config(page_title="Ajustar zonas", layout="wide")
 
-st.title("📋 Captura automática con zonas de colores")
+st.title("🛠️ Ajustar zonas por campo")
 
-archivo = st.file_uploader("Sube una foto del formato", type=["jpg", "jpeg", "png"])
+archivo = st.file_uploader("Sube la foto", type=["jpg", "jpeg", "png"])
 
-@st.cache_resource
-def cargar_ocr():
-    return easyocr.Reader(["es"], gpu=False)
-
-reader = cargar_ocr()
-
-BASE_W = 900
-BASE_H = 1151
-
-ZONAS = {
-    "Fecha de elaboración": {"coords": (400, 320, 837, 393), "color": "red"},
-    "Maquinista": {"coords": (400, 371, 834, 430), "color": "blue"},
-    "Máquina No.": {"coords": (400, 429, 834, 481), "color": "green"},
-    "Carretilla": {"coords": (400, 481, 834, 535), "color": "orange"},
-    "Código de rollo": {"coords": (395, 524, 900, 595), "color": "purple"},
-    "Tipo de bolsa": {"coords": (395, 578, 900, 636), "color": "brown"},
-    "Tamaño": {"coords": (395, 633, 900, 689), "color": "cyan"},
-    "Enfajillador": {"coords": (395, 780, 900, 872), "color": "magenta"},
-    "Número de fajillas": {"coords": (395, 870, 900, 926), "color": "lime"},
-    "Empacador": {"coords": (395, 1044, 900, 1100), "color": "navy"},
-    "Número de bultos": {"coords": (395, 1087, 900, 1151), "color": "black"},
+ZONAS_BASE = {
+    "Fecha de elaboración": (400, 320, 837, 393),
+    "Maquinista": (400, 371, 834, 430),
+    "Máquina No.": (400, 429, 834, 481),
+    "Carretilla": (400, 481, 834, 535),
+    "Código de rollo": (395, 524, 900, 595),
+    "Tipo de bolsa": (395, 578, 900, 636),
+    "Tamaño": (395, 633, 900, 689),
+    "Enfajillador": (395, 780, 900, 872),
+    "Número de fajillas": (395, 870, 900, 926),
+    "Empacador": (395, 1044, 900, 1100),
+    "Número de bultos": (395, 1087, 900, 1151),
 }
 
-def escalar_coords(coords, ancho, alto):
-    x1, y1, x2, y2 = coords
-    return (
-        int(x1 * ancho / BASE_W),
-        int(y1 * alto / BASE_H),
-        int(x2 * ancho / BASE_W),
-        int(y2 * alto / BASE_H),
-    )
-
-def limpiar_ocr(texto):
-    return (
-        texto.replace("|", "1")
-        .replace("—", "-")
-        .replace("_", "")
-        .replace("  ", " ")
-        .strip()
-    )
-
-def leer_zona(img, x1, y1, x2, y2):
-    zona = img[y1:y2, x1:x2]
-
-    if zona.size == 0:
-        return ""
-
-    gris = cv2.cvtColor(zona, cv2.COLOR_RGB2GRAY)
-    gris = cv2.resize(gris, None, fx=3, fy=3, interpolation=cv2.INTER_CUBIC)
-    gris = cv2.GaussianBlur(gris, (3, 3), 0)
-
-    thresh = cv2.threshold(
-        gris,
-        0,
-        255,
-        cv2.THRESH_BINARY + cv2.THRESH_OTSU
-    )[1]
-
-    horizontal_kernel = cv2.getStructuringElement(cv2.MORPH_RECT, (45, 1))
-    detect_horizontal = cv2.morphologyEx(
-        thresh,
-        cv2.MORPH_OPEN,
-        horizontal_kernel,
-        iterations=2
-    )
-
-    cnts = cv2.findContours(
-        detect_horizontal,
-        cv2.RETR_EXTERNAL,
-        cv2.CHAIN_APPROX_SIMPLE
-    )[0]
-
-    for c in cnts:
-        cv2.drawContours(thresh, [c], -1, (255, 255, 255), 3)
-
-    resultado = reader.readtext(thresh, detail=0, paragraph=True)
-
-    return limpiar_ocr(" ".join(resultado))
-
-def dibujar_zonas(imagen):
-    copia = imagen.copy()
-    draw = ImageDraw.Draw(copia)
-    ancho, alto = copia.size
-
-    for campo, info in ZONAS.items():
-        x1, y1, x2, y2 = escalar_coords(info["coords"], ancho, alto)
-        color = info["color"]
-
-        draw.rectangle((x1, y1, x2, y2), outline=color, width=4)
-        draw.text((x1, max(0, y1 - 18)), campo, fill=color)
-
-    return copia
+COLORES = ["red", "blue", "green", "orange", "purple", "brown", "cyan", "magenta", "lime", "navy", "black"]
 
 if archivo:
-    imagen_original = Image.open(archivo).convert("RGB")
+    imagen = Image.open(archivo).convert("RGB")
+    ancho, alto = imagen.size
 
-    st.subheader("1️⃣ Recorta solo la hoja")
-    box = st_cropper(
-        imagen_original,
-        realtime_update=True,
-        box_color="#FF0000",
-        aspect_ratio=None,
-        return_type="box"
-    )
+    campo = st.selectbox("Selecciona el campo que quieres mover", list(ZONAS_BASE.keys()))
 
-    if box:
-        x1 = int(box["left"])
-        y1 = int(box["top"])
-        x2 = int(box["left"] + box["width"])
-        y2 = int(box["top"] + box["height"])
+    x1b, y1b, x2b, y2b = ZONAS_BASE[campo]
 
-        recorte = imagen_original.crop((x1, y1, x2, y2))
+    x1 = st.slider("x1 izquierda", 0, ancho, min(x1b, ancho))
+    y1 = st.slider("y1 arriba", 0, alto, min(y1b, alto))
+    x2 = st.slider("x2 derecha", 0, ancho, min(x2b, ancho))
+    y2 = st.slider("y2 abajo", 0, alto, min(y2b, alto))
 
-        st.subheader("2️⃣ Zonas detectadas por color")
-        imagen_zonas = dibujar_zonas(recorte)
-        st.image(imagen_zonas, use_container_width=True)
+    copia = imagen.copy()
+    draw = ImageDraw.Draw(copia)
 
-        if st.button("🔍 Escanear zonas"):
-            img = np.array(recorte)
-            ancho, alto = recorte.size
+    for i, (nombre, coords) in enumerate(ZONAS_BASE.items()):
+        color = COLORES[i % len(COLORES)]
+        cx1, cy1, cx2, cy2 = coords
 
-            datos = {}
+        if nombre == campo:
+            cx1, cy1, cx2, cy2 = x1, y1, x2, y2
 
-            for campo, info in ZONAS.items():
-                zx1, zy1, zx2, zy2 = escalar_coords(info["coords"], ancho, alto)
-                datos[campo] = leer_zona(img, zx1, zy1, zx2, zy2)
+        draw.rectangle((cx1, cy1, cx2, cy2), outline=color, width=5)
+        draw.text((cx1, max(0, cy1 - 20)), nombre, fill=color)
 
-            st.subheader("3️⃣ Datos detectados")
+    col1, col2 = st.columns(2)
 
-            for campo in datos:
-                datos[campo] = st.text_input(campo, datos[campo])
+    with col1:
+        st.subheader("Vista con zonas")
+        st.image(copia, use_container_width=True)
 
-            df = pd.DataFrame([datos])
-            st.dataframe(df, use_container_width=True)
+    with col2:
+        st.subheader("Recorte actual")
+        if x2 > x1 and y2 > y1:
+            recorte = imagen.crop((x1, y1, x2, y2))
+            st.image(recorte, use_container_width=True)
 
-            output = BytesIO()
-
-            with pd.ExcelWriter(output, engine="openpyxl") as writer:
-                df.to_excel(writer, index=False, sheet_name="Produccion")
-
-            output.seek(0)
-
-            st.download_button(
-                "⬇ Descargar Excel",
-                data=output,
-                file_name="captura_produccion.xlsx",
-                mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-            )
+            st.code(f'"{campo}": ({x1}, {y1}, {x2}, {y2}),')
