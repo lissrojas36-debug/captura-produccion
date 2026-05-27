@@ -1,115 +1,73 @@
 import streamlit as st
 import pandas as pd
-import pytesseract
 from PIL import Image
 from io import BytesIO
-import cv2
-import numpy as np
 
-st.set_page_config(page_title="Captura Producción")
+st.set_page_config(page_title="Captura Producción", layout="wide")
 
-st.title("📋 Captura Producción")
+st.title("📋 Captura manual de producción")
 
-archivo = st.file_uploader(
-    "Sube una foto",
-    type=["jpg", "jpeg", "png"]
-)
+if "registros" not in st.session_state:
+    st.session_state.registros = []
 
-def leer_zona(img, x1, y1, x2, y2):
+archivo = st.file_uploader("Sube la foto del formato", type=["jpg", "jpeg", "png"])
 
-    zona = img[y1:y2, x1:x2]
+col1, col2 = st.columns(2)
 
-    gris = cv2.cvtColor(zona, cv2.COLOR_BGR2GRAY)
+with col1:
+    if archivo:
+        imagen = Image.open(archivo)
+        st.image(imagen, caption="Formato", use_container_width=True)
 
-    gris = cv2.GaussianBlur(gris, (3,3), 0)
+with col2:
+    st.subheader("Captura de datos")
 
-    thresh = cv2.threshold(
-        gris,
-        0,
-        255,
-        cv2.THRESH_BINARY + cv2.THRESH_OTSU
-    )[1]
+    fecha = st.text_input("Fecha de elaboración")
+    maquinista = st.text_input("Maquinista")
+    maquina = st.text_input("Máquina No.")
+    carretilla = st.text_input("Carretilla")
+    codigo = st.text_input("Código de rollo")
+    tipo = st.text_input("Tipo de bolsa")
+    tamano = st.text_input("Tamaño")
+    enfajillador = st.text_input("Enfajillador")
+    fajillas = st.text_input("Número de fajillas")
+    empacador = st.text_input("Empacador")
+    bultos = st.text_input("Número de bultos")
 
-    texto = pytesseract.image_to_string(
-        thresh,
-        config='--psm 7'
+    if st.button("➕ Agregar registro"):
+        st.session_state.registros.append({
+            "Fecha de elaboración": fecha,
+            "Maquinista": maquinista,
+            "Máquina No.": maquina,
+            "Carretilla": carretilla,
+            "Código de rollo": codigo,
+            "Tipo de bolsa": tipo,
+            "Tamaño": tamano,
+            "Enfajillador": enfajillador,
+            "Número de fajillas": fajillas,
+            "Empacador": empacador,
+            "Número de bultos": bultos,
+        })
+
+        st.success("Registro agregado")
+
+st.subheader("Registros capturados")
+
+df = pd.DataFrame(st.session_state.registros)
+
+st.dataframe(df, use_container_width=True)
+
+if len(df) > 0:
+    output = BytesIO()
+
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Produccion")
+
+    output.seek(0)
+
+    st.download_button(
+        "⬇ Descargar Excel",
+        data=output,
+        file_name="captura_produccion.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
     )
-
-    return texto.strip()
-
-if archivo:
-
-    imagen = Image.open(archivo)
-
-    img = np.array(imagen)
-
-    st.image(imagen, use_container_width=True)
-
-    datos = {
-
-        "Fecha de elaboración":
-            leer_zona(img, 420, 180, 860, 250),
-
-        "Maquinista":
-            leer_zona(img, 420, 240, 860, 330),
-
-        "Máquina No.":
-            leer_zona(img, 520, 330, 860, 390),
-
-        "Carretilla":
-            leer_zona(img, 520, 390, 860, 450),
-
-        "Código de rollo":
-            leer_zona(img, 420, 450, 860, 550),
-
-        "Tipo de bolsa":
-            leer_zona(img, 520, 540, 860, 620),
-
-        "Tamaño":
-            leer_zona(img, 520, 610, 860, 690),
-
-        "Enfajillador":
-            leer_zona(img, 420, 760, 860, 860),
-
-        "Número de fajillas":
-            leer_zona(img, 520, 850, 860, 930),
-
-        "Empacador":
-            leer_zona(img, 420, 1030, 860, 1130),
-
-        "Número de bultos":
-            leer_zona(img, 520, 1130, 860, 1210),
-    }
-
-    st.subheader("Datos capturados")
-
-    for campo in datos:
-        datos[campo] = st.text_input(
-            campo,
-            datos[campo]
-        )
-
-    if st.button("📥 Generar Excel"):
-
-        df = pd.DataFrame([datos])
-
-        output = BytesIO()
-
-        with pd.ExcelWriter(
-            output,
-            engine="openpyxl"
-        ) as writer:
-
-            df.to_excel(
-                writer,
-                index=False
-            )
-
-        output.seek(0)
-
-        st.download_button(
-            "⬇ Descargar Excel",
-            data=output,
-            file_name="captura_produccion.xlsx",
-            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-        )
