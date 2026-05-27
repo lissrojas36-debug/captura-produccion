@@ -4,13 +4,13 @@ import pytesseract
 from PIL import Image
 import re
 from io import BytesIO
+import cv2
+import numpy as np
 
 st.set_page_config(page_title="Captura de Producción", layout="centered")
 
 st.title("📋 Captura de Producción")
 st.write("Sube una foto del formato para extraer los datos automáticamente.")
-
-pytesseract.pytesseract.tesseract_cmd = r"/usr/bin/tesseract"
 
 archivo = st.file_uploader(
     "Sube una imagen",
@@ -28,18 +28,53 @@ def buscar(patron, texto):
 
 if archivo:
 
+    # Abrir imagen
     imagen = Image.open(archivo)
 
     st.image(imagen, caption="Imagen subida", use_container_width=True)
 
-    texto = pytesseract.image_to_string(imagen, lang="spa")
+    # Convertir a array
+    img = np.array(imagen)
+
+    # Escala de grises
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
+    # Reducir ruido
+    gray = cv2.GaussianBlur(gray, (3,3), 0)
+
+    # Mejorar contraste
+    thresh = cv2.threshold(
+        gray,
+        0,
+        255,
+        cv2.THRESH_BINARY + cv2.THRESH_OTSU
+    )[1]
+
+    # Mostrar imagen procesada
+    st.subheader("Imagen procesada")
+
+    st.image(thresh, use_container_width=True)
+
+    # OCR
+    texto = pytesseract.image_to_string(
+        thresh,
+        config='--psm 6'
+    )
 
     texto = limpiar(texto)
 
+    # Mostrar texto detectado
     st.subheader("Texto detectado")
-    st.text_area("", texto, height=250)
 
+    st.text_area(
+        "",
+        texto,
+        height=250
+    )
+
+    # Extraer datos
     datos = {
+
         "Fecha de elaboración":
             buscar(r"FECHA DE ELABORACION[:\s]*(.*?)(MAQUINISTA|MAQUINA)", texto),
 
@@ -76,17 +111,30 @@ if archivo:
 
     st.subheader("Datos capturados")
 
+    # Inputs editables
     for campo in datos:
-        datos[campo] = st.text_input(campo, datos[campo])
+        datos[campo] = st.text_input(
+            campo,
+            datos[campo]
+        )
 
+    # Generar Excel
     if st.button("📥 Generar Excel"):
 
         df = pd.DataFrame([datos])
 
         output = BytesIO()
 
-        with pd.ExcelWriter(output, engine='openpyxl') as writer:
-            df.to_excel(writer, index=False, sheet_name='Produccion')
+        with pd.ExcelWriter(
+            output,
+            engine='openpyxl'
+        ) as writer:
+
+            df.to_excel(
+                writer,
+                index=False,
+                sheet_name='Produccion'
+            )
 
         output.seek(0)
 
