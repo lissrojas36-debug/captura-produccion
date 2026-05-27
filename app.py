@@ -4,6 +4,7 @@ from PIL import Image
 from io import BytesIO
 import easyocr
 import numpy as np
+import cv2
 
 st.set_page_config(page_title="Captura Producción", layout="wide")
 
@@ -15,8 +16,34 @@ reader = easyocr.Reader(["es"], gpu=False)
 
 def leer_zona(img, x1, y1, x2, y2):
     zona = img[y1:y2, x1:x2]
-    resultado = reader.readtext(zona)
-    texto = " ".join([r[1] for r in resultado])
+
+    gris = cv2.cvtColor(zona, cv2.COLOR_RGB2GRAY)
+
+    gris = cv2.resize(
+        gris,
+        None,
+        fx=2,
+        fy=2,
+        interpolation=cv2.INTER_CUBIC
+    )
+
+    gris = cv2.GaussianBlur(gris, (3, 3), 0)
+
+    thresh = cv2.threshold(
+        gris,
+        0,
+        255,
+        cv2.THRESH_BINARY + cv2.THRESH_OTSU
+    )[1]
+
+    resultado = reader.readtext(
+        thresh,
+        detail=0,
+        paragraph=True
+    )
+
+    texto = " ".join(resultado)
+
     return texto.strip()
 
 if archivo:
@@ -42,6 +69,7 @@ if archivo:
     st.subheader("Datos detectados")
 
     df = pd.DataFrame([datos])
+
     st.dataframe(df, use_container_width=True)
 
     output = BytesIO()
