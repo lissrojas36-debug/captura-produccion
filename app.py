@@ -1,54 +1,59 @@
 import streamlit as st
+import pandas as pd
 from PIL import Image
+from io import BytesIO
+import easyocr
 import numpy as np
 
-st.set_page_config(page_title="Calibrador de zonas", layout="wide")
-st.title("🛠️ Calibrador de zonas del formato")
+st.set_page_config(page_title="Captura Producción", layout="wide")
 
-archivo = st.file_uploader("Sube la foto del formato", type=["jpg", "jpeg", "png"])
+st.title("📋 Captura automática de producción")
+
+archivo = st.file_uploader("Sube una foto", type=["jpg", "jpeg", "png"])
+
+reader = easyocr.Reader(["es"], gpu=False)
+
+def leer_zona(img, x1, y1, x2, y2):
+    zona = img[y1:y2, x1:x2]
+    resultado = reader.readtext(zona)
+    texto = " ".join([r[1] for r in resultado])
+    return texto.strip()
 
 if archivo:
-    imagen = Image.open(archivo)
+    imagen = Image.open(archivo).convert("RGB")
     img = np.array(imagen)
-    alto, ancho = img.shape[:2]
 
-    st.write(f"Tamaño de imagen: {ancho} x {alto}")
+    st.image(imagen, caption="Formato cargado", use_container_width=True)
 
-    campos = [
-        "Fecha de elaboración",
-        "Maquinista",
-        "Máquina No.",
-        "Carretilla",
-        "Código de rollo",
-        "Tipo de bolsa",
-        "Tamaño",
-        "Enfajillador",
-        "Número de fajillas",
-        "Empacador",
-        "Número de bultos",
-    ]
+    datos = {
+        "Fecha de elaboración": leer_zona(img, 395, 320, 837, 393),
+        "Maquinista": leer_zona(img, 395, 371, 834, 430),
+        "Máquina No.": leer_zona(img, 395, 429, 834, 481),
+        "Carretilla": leer_zona(img, 395, 481, 834, 535),
+        "Código de rollo": leer_zona(img, 395, 524, 900, 595),
+        "Tipo de bolsa": leer_zona(img, 395, 578, 900, 636),
+        "Tamaño": leer_zona(img, 395, 633, 900, 689),
+        "Enfajillador": leer_zona(img, 395, 780, 900, 872),
+        "Número de fajillas": leer_zona(img, 395, 870, 900, 926),
+        "Empacador": leer_zona(img, 395, 1044, 900, 1100),
+        "Número de bultos": leer_zona(img, 395, 1087, 900, 1151),
+    }
 
-    campo = st.selectbox("Selecciona el campo a calibrar", campos)
+    st.subheader("Datos detectados")
 
-    col1, col2 = st.columns(2)
+    df = pd.DataFrame([datos])
+    st.dataframe(df, use_container_width=True)
 
-    with col1:
-        st.subheader("Imagen completa")
-        st.image(imagen, use_container_width=True)
+    output = BytesIO()
 
-    with col2:
-        st.subheader("Ajusta coordenadas")
+    with pd.ExcelWriter(output, engine="openpyxl") as writer:
+        df.to_excel(writer, index=False, sheet_name="Produccion")
 
-        x1 = st.slider("x1 izquierda", 0, ancho, int(ancho * 0.45))
-        y1 = st.slider("y1 arriba", 0, alto, int(alto * 0.20))
-        x2 = st.slider("x2 derecha", 0, ancho, int(ancho * 0.95))
-        y2 = st.slider("y2 abajo", 0, alto, int(alto * 0.30))
+    output.seek(0)
 
-        if x2 > x1 and y2 > y1:
-            recorte = img[y1:y2, x1:x2]
-            st.subheader("Recorte")
-            st.image(recorte, use_container_width=True)
-
-            st.code(
-                f'"{campo}": leer_zona(img, {x1}, {y1}, {x2}, {y2}),'
-            )
+    st.download_button(
+        "⬇ Descargar Excel",
+        data=output,
+        file_name="captura_produccion.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
