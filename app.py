@@ -8,14 +8,14 @@ import numpy as np
 
 st.set_page_config(page_title="Captura Producción")
 
-st.title("📋 Captura de Producción")
+st.title("📋 Captura Producción")
 
 archivo = st.file_uploader(
     "Sube una foto",
-    type=["jpg", "png", "jpeg"]
+    type=["jpg", "jpeg", "png"]
 )
 
-def ocr_zona(img, x1, y1, x2, y2):
+def leer_zona(img, x1, y1, x2, y2):
 
     zona = img[y1:y2, x1:x2]
 
@@ -45,42 +45,40 @@ if archivo:
 
     st.image(imagen, use_container_width=True)
 
-    alto, ancho = img.shape[:2]
-
     datos = {
 
         "Fecha de elaboración":
-            ocr_zona(img, 350, 180, 760, 240),
+            leer_zona(img, 420, 180, 860, 250),
 
         "Maquinista":
-            ocr_zona(img, 350, 240, 760, 310),
+            leer_zona(img, 420, 240, 860, 330),
 
         "Máquina No.":
-            ocr_zona(img, 350, 300, 760, 360),
+            leer_zona(img, 520, 330, 860, 390),
 
         "Carretilla":
-            ocr_zona(img, 350, 350, 760, 410),
+            leer_zona(img, 520, 390, 860, 450),
 
         "Código de rollo":
-            ocr_zona(img, 350, 400, 760, 470),
+            leer_zona(img, 420, 450, 860, 550),
 
         "Tipo de bolsa":
-            ocr_zona(img, 350, 460, 760, 520),
+            leer_zona(img, 520, 540, 860, 620),
 
         "Tamaño":
-            ocr_zona(img, 350, 520, 760, 580),
+            leer_zona(img, 520, 610, 860, 690),
 
         "Enfajillador":
-            ocr_zona(img, 350, 650, 760, 720),
+            leer_zona(img, 420, 760, 860, 860),
 
         "Número de fajillas":
-            ocr_zona(img, 350, 720, 760, 780),
+            leer_zona(img, 520, 850, 860, 930),
 
         "Empacador":
-            ocr_zona(img, 350, 850, 760, 920),
+            leer_zona(img, 420, 1030, 860, 1130),
 
         "Número de bultos":
-            ocr_zona(img, 350, 920, 760, 980),
+            leer_zona(img, 520, 1130, 860, 1210),
     }
 
     st.subheader("Datos capturados")
@@ -99,7 +97,7 @@ if archivo:
 
         with pd.ExcelWriter(
             output,
-            engine='openpyxl'
+            engine="openpyxl"
         ) as writer:
 
             df.to_excel(
