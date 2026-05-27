@@ -2,123 +2,95 @@ import streamlit as st
 import pandas as pd
 import pytesseract
 from PIL import Image
-import re
 from io import BytesIO
 import cv2
 import numpy as np
 
-st.set_page_config(page_title="Captura de Producción", layout="centered")
+st.set_page_config(page_title="Captura Producción")
 
 st.title("📋 Captura de Producción")
-st.write("Sube una foto del formato para extraer los datos automáticamente.")
 
 archivo = st.file_uploader(
-    "Sube una imagen",
-    type=["jpg", "jpeg", "png"]
+    "Sube una foto",
+    type=["jpg", "png", "jpeg"]
 )
 
-def limpiar(texto):
-    return texto.replace("\n", " ").strip()
+def ocr_zona(img, x1, y1, x2, y2):
 
-def buscar(patron, texto):
-    resultado = re.search(patron, texto, re.IGNORECASE)
-    if resultado:
-        return resultado.group(1).strip()
-    return ""
+    zona = img[y1:y2, x1:x2]
 
-if archivo:
+    gris = cv2.cvtColor(zona, cv2.COLOR_BGR2GRAY)
 
-    # Abrir imagen
-    imagen = Image.open(archivo)
+    gris = cv2.GaussianBlur(gris, (3,3), 0)
 
-    st.image(imagen, caption="Imagen subida", use_container_width=True)
-
-    # Convertir a array
-    img = np.array(imagen)
-
-    # Escala de grises
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-
-    # Reducir ruido
-    gray = cv2.GaussianBlur(gray, (3,3), 0)
-
-    # Mejorar contraste
     thresh = cv2.threshold(
-        gray,
+        gris,
         0,
         255,
         cv2.THRESH_BINARY + cv2.THRESH_OTSU
     )[1]
 
-    # Mostrar imagen procesada
-    st.subheader("Imagen procesada")
-
-    st.image(thresh, use_container_width=True)
-
-    # OCR
     texto = pytesseract.image_to_string(
         thresh,
-        config='--psm 6'
+        config='--psm 7'
     )
 
-    texto = limpiar(texto)
+    return texto.strip()
 
-    # Mostrar texto detectado
-    st.subheader("Texto detectado")
+if archivo:
 
-    st.text_area(
-        "",
-        texto,
-        height=250
-    )
+    imagen = Image.open(archivo)
 
-    # Extraer datos
+    img = np.array(imagen)
+
+    st.image(imagen, use_container_width=True)
+
+    alto, ancho = img.shape[:2]
+
     datos = {
 
         "Fecha de elaboración":
-            buscar(r"FECHA DE ELABORACION[:\s]*(.*?)(MAQUINISTA|MAQUINA)", texto),
+            ocr_zona(img, 350, 180, 760, 240),
 
         "Maquinista":
-            buscar(r"MAQUINISTA[:\s]*(.*?)(MAQUINA)", texto),
+            ocr_zona(img, 350, 240, 760, 310),
 
         "Máquina No.":
-            buscar(r"MAQUINA No\.?[:\s]*(.*?)(CARRETILLA)", texto),
+            ocr_zona(img, 350, 300, 760, 360),
 
         "Carretilla":
-            buscar(r"CARRETILLA No\.?[:\s]*(.*?)(CODIGO)", texto),
+            ocr_zona(img, 350, 350, 760, 410),
 
         "Código de rollo":
-            buscar(r"CODIGO ROLLO[:\s]*(.*?)(TIPO)", texto),
+            ocr_zona(img, 350, 400, 760, 470),
 
         "Tipo de bolsa":
-            buscar(r"TIPO DE BOLSA[:\s]*(.*?)(TAMAÑO|TAMANO)", texto),
+            ocr_zona(img, 350, 460, 760, 520),
 
         "Tamaño":
-            buscar(r"(?:TAMAÑO|TAMANO)[:\s]*(.*?)(MILLARES|FAJILLA)", texto),
+            ocr_zona(img, 350, 520, 760, 580),
 
         "Enfajillador":
-            buscar(r"ENFAJILLADOR[:\s]*(.*?)(No\.? DE FAJILLAS)", texto),
+            ocr_zona(img, 350, 650, 760, 720),
 
         "Número de fajillas":
-            buscar(r"No\.? DE FAJILLAS[:\s]*(.*?)(SOBRANTE)", texto),
+            ocr_zona(img, 350, 720, 760, 780),
 
         "Empacador":
-            buscar(r"EMPACADOR[:\s]*(.*?)(No\.? DE BULTOS)", texto),
+            ocr_zona(img, 350, 850, 760, 920),
 
         "Número de bultos":
-            buscar(r"No\.? DE BULTOS[:\s]*(.*)", texto),
+            ocr_zona(img, 350, 920, 760, 980),
     }
 
     st.subheader("Datos capturados")
 
-    # Inputs editables
     for campo in datos:
         datos[campo] = st.text_input(
             campo,
             datos[campo]
         )
 
-    # Generar Excel
     if st.button("📥 Generar Excel"):
 
         df = pd.DataFrame([datos])
@@ -132,14 +104,13 @@ if archivo:
 
             df.to_excel(
                 writer,
-                index=False,
-                sheet_name='Produccion'
+                index=False
             )
 
         output.seek(0)
 
         st.download_button(
-            label="⬇ Descargar Excel",
+            "⬇ Descargar Excel",
             data=output,
             file_name="captura_produccion.xlsx",
             mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
