@@ -15,26 +15,60 @@ archivo = st.file_uploader("Sube una foto", type=["jpg", "jpeg", "png"])
 reader = easyocr.Reader(["es"], gpu=False)
 
 def leer_zona(img, x1, y1, x2, y2):
+
     zona = img[y1:y2, x1:x2]
 
     gris = cv2.cvtColor(zona, cv2.COLOR_RGB2GRAY)
 
+    # aumentar tamaño
     gris = cv2.resize(
         gris,
         None,
-        fx=2,
-        fy=2,
+        fx=3,
+        fy=3,
         interpolation=cv2.INTER_CUBIC
     )
 
-    gris = cv2.GaussianBlur(gris, (3, 3), 0)
+    # desenfoque
+    gris = cv2.GaussianBlur(gris, (3,3), 0)
 
+    # binarizar
     thresh = cv2.threshold(
         gris,
         0,
         255,
         cv2.THRESH_BINARY + cv2.THRESH_OTSU
     )[1]
+
+    # eliminar líneas horizontales
+    horizontal_kernel = cv2.getStructuringElement(
+        cv2.MORPH_RECT,
+        (40,1)
+    )
+
+    detect_horizontal = cv2.morphologyEx(
+        thresh,
+        cv2.MORPH_OPEN,
+        horizontal_kernel,
+        iterations=2
+    )
+
+    cnts = cv2.findContours(
+        detect_horizontal,
+        cv2.RETR_EXTERNAL,
+        cv2.CHAIN_APPROX_SIMPLE
+    )
+
+    cnts = cnts[0]
+
+    for c in cnts:
+        cv2.drawContours(
+            thresh,
+            [c],
+            -1,
+            (255,255,255),
+            2
+        )
 
     resultado = reader.readtext(
         thresh,
