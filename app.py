@@ -2,66 +2,92 @@ import streamlit as st
 import pandas as pd
 from PIL import Image
 from io import BytesIO
+import easyocr
+import cv2
+import numpy as np
 
-st.set_page_config(page_title="Captura Producción", layout="wide")
+st.set_page_config(page_title="Captura Producción")
 
-st.title("📋 Captura manual de producción")
+st.title("📋 Captura automática")
 
-if "registros" not in st.session_state:
-    st.session_state.registros = []
+archivo = st.file_uploader(
+    "Sube una foto",
+    type=["jpg", "jpeg", "png"]
+)
 
-archivo = st.file_uploader("Sube la foto del formato", type=["jpg", "jpeg", "png"])
+reader = easyocr.Reader(['es'], gpu=False)
 
-col1, col2 = st.columns(2)
+def leer_zona(img, x1, y1, x2, y2):
 
-with col1:
-    if archivo:
-        imagen = Image.open(archivo)
-        st.image(imagen, caption="Formato", use_container_width=True)
+    zona = img[y1:y2, x1:x2]
 
-with col2:
-    st.subheader("Captura de datos")
+    resultado = reader.readtext(zona)
 
-    fecha = st.text_input("Fecha de elaboración")
-    maquinista = st.text_input("Maquinista")
-    maquina = st.text_input("Máquina No.")
-    carretilla = st.text_input("Carretilla")
-    codigo = st.text_input("Código de rollo")
-    tipo = st.text_input("Tipo de bolsa")
-    tamano = st.text_input("Tamaño")
-    enfajillador = st.text_input("Enfajillador")
-    fajillas = st.text_input("Número de fajillas")
-    empacador = st.text_input("Empacador")
-    bultos = st.text_input("Número de bultos")
+    texto = " ".join([r[1] for r in resultado])
 
-    if st.button("➕ Agregar registro"):
-        st.session_state.registros.append({
-            "Fecha de elaboración": fecha,
-            "Maquinista": maquinista,
-            "Máquina No.": maquina,
-            "Carretilla": carretilla,
-            "Código de rollo": codigo,
-            "Tipo de bolsa": tipo,
-            "Tamaño": tamano,
-            "Enfajillador": enfajillador,
-            "Número de fajillas": fajillas,
-            "Empacador": empacador,
-            "Número de bultos": bultos,
-        })
+    return texto
 
-        st.success("Registro agregado")
+if archivo:
 
-st.subheader("Registros capturados")
+    imagen = Image.open(archivo)
 
-df = pd.DataFrame(st.session_state.registros)
+    img = np.array(imagen)
 
-st.dataframe(df, use_container_width=True)
+    st.image(imagen, use_container_width=True)
 
-if len(df) > 0:
+    datos = {
+
+        "Fecha de elaboración":
+            leer_zona(img, 400, 180, 900, 260),
+
+        "Maquinista":
+            leer_zona(img, 400, 240, 900, 340),
+
+        "Máquina No.":
+            leer_zona(img, 500, 320, 900, 400),
+
+        "Carretilla":
+            leer_zona(img, 500, 390, 900, 470),
+
+        "Código de rollo":
+            leer_zona(img, 400, 450, 900, 560),
+
+        "Tipo de bolsa":
+            leer_zona(img, 500, 540, 900, 620),
+
+        "Tamaño":
+            leer_zona(img, 500, 620, 900, 700),
+
+        "Enfajillador":
+            leer_zona(img, 400, 760, 900, 860),
+
+        "Número de fajillas":
+            leer_zona(img, 500, 860, 900, 940),
+
+        "Empacador":
+            leer_zona(img, 400, 1020, 900, 1120),
+
+        "Número de bultos":
+            leer_zona(img, 500, 1120, 900, 1200),
+    }
+
+    st.subheader("Datos capturados")
+
+    df = pd.DataFrame([datos])
+
+    st.dataframe(df)
+
     output = BytesIO()
 
-    with pd.ExcelWriter(output, engine="openpyxl") as writer:
-        df.to_excel(writer, index=False, sheet_name="Produccion")
+    with pd.ExcelWriter(
+        output,
+        engine="openpyxl"
+    ) as writer:
+
+        df.to_excel(
+            writer,
+            index=False
+        )
 
     output.seek(0)
 
